@@ -182,7 +182,7 @@ INSTANTIATE_TEST_SUITE_P(
     smoke_sdpa_gpu_test_tinytc_d64,
     sdpa_gpu_test,
     ::testing::Values(
-        sdpa_test_params{64, 32, 1024, 128, 1, "sdpa_tinytc", false}
+        sdpa_test_params{64, 32, 990, 128, 1, "sdpa_tinytc", false}
     ),
     sdpa_gpu_test::PrintToStringParamName
 );
@@ -190,7 +190,7 @@ INSTANTIATE_TEST_SUITE_P(
     smoke_sdpa_gpu_test_tinytc_d128,
     sdpa_gpu_test,
     ::testing::Values(
-        sdpa_test_params{128, 32, 1024, 128, 1, "sdpa_tinytc", false}
+        sdpa_test_params{128, 32, 990, 128, 1, "sdpa_tinytc", false}
     ),
     sdpa_gpu_test::PrintToStringParamName
 );

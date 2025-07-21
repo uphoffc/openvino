@@ -407,13 +407,14 @@ void kernels_cache::build_batch(const batch_program& batch, compiled_kernels& co
                     auto prog = tinytc::create_kernel_bundle(ctx, dev, tprog.get(), batch.flags);
                     return cl::Program(prog.get(), true);
                 }
-                return cl::Program(cl_build_device.get_context(), batch.source);
+                auto program = cl::Program(cl_build_device.get_context(), batch.source);
+                {
+                    OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "KernelsCache::BuildProgram::RunCompilation");
+                    if (program.build({cl_build_device.get_device()}, batch.options.c_str()) != CL_SUCCESS)
+                        throw std::runtime_error("Failed in building program.");
+                }
+                return program;
             }();
-            {
-                OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "KernelsCache::BuildProgram::RunCompilation");
-                if (program.build({cl_build_device.get_device()}, batch.options.c_str()) != CL_SUCCESS)
-                    throw std::runtime_error("Failed in building program.");
-            }
 
             if (dump_sources && dump_file.good()) {
                 dump_file << "\n/* Build Log:\n";

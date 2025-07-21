@@ -127,8 +127,14 @@ CommonDispatchData SDPAKernelTinyTC::SetDefault(const sdpa_params& params) const
     const auto bs = block_size(params.conf.k_head_size);
     const auto num_blocks = 1 + (target_seqlen - 1) / bs;
 
-    dispatch_data.lws[0] = 16;
-    dispatch_data.lws[1] = 32;
+    if (params.conf.k_head_size == 64) {
+        dispatch_data.lws[0] = 16;
+        dispatch_data.lws[1] = 32;
+    } else {
+        const auto sgs = 16;
+        dispatch_data.lws[0] = params.conf.k_head_size / 32 * sgs;
+        dispatch_data.lws[1] = bs / 32;
+    }
     dispatch_data.lws[2] = 1;
     dispatch_data.gws = dispatch_data.lws;
     dispatch_data.gws[0] *= num_blocks;
@@ -140,11 +146,12 @@ CommonDispatchData SDPAKernelTinyTC::SetDefault(const sdpa_params& params) const
 
 clKernelData SDPAKernelTinyTC::get_kernel_data(const sdpa_params& params) const {
     auto dispatch_data = SetDefault(params);
-    const auto& entry_point = "flash_attention";
+    const auto& kernel_name = params.conf.k_head_size == 64 ? "sdpa_tinytc_d64" : "sdpa_tinytc";
+    const auto& entry_point = params.conf.k_head_size == 64 ? "flash_attention_d64" : "flash_attention";
     auto jit = CreateJit(GetJitConstants(params));
     clKernelData kernel;
 
-    FillCLKernelData(kernel, dispatch_data, params.engineInfo, kernelName, jit, entry_point, params.is_shape_agnostic);
+    FillCLKernelData(kernel, dispatch_data, params.engineInfo, kernel_name, jit, entry_point, params.is_shape_agnostic);
 
     ScalarDescriptor index_prototype;
     index_prototype.t = ScalarDescriptor::Types::INT64;
@@ -200,6 +207,7 @@ KernelsData SDPAKernelTinyTC::GetKernelsData(const Params& params) const {
     }
 
     GetUpdateDispatchDataFunc(kd);
+    kd.update_dispatch_data_func(params, kd);
 
     return {kd};
 }
