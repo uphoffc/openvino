@@ -6,6 +6,7 @@
 #include "sdpa_kernel_ref.h"
 #include "sdpa_kernel_opt.h"
 #include "sdpa_kernel_micro.h"
+#include "sdpa_kernel_tinytc.h"
 
 #include "pa_sdpa_kernel_opt.h"
 #include "pa_kv_cache_update_kernel_ref.h"
@@ -14,6 +15,7 @@
 namespace kernel_selector {
 
 sdpa_kernel_selector::sdpa_kernel_selector() {
+    Attach<SDPAKernelTinyTC>();
     Attach<SDPAKernelOpt>();
     Attach<SDPAKernelRef>();
 #ifdef ENABLE_ONEDNN_FOR_GPU

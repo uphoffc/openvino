@@ -28,13 +28,14 @@ using namespace cldnn;
 using namespace ::tests;
 
 namespace  {
-#ifdef ENABLE_ONEDNN_FOR_GPU
 struct sdpa_test_params {
     int head_size;
     int num_heads;
     int sequence_length_q;
     int sequence_length_kv;
     int batch;
+    char const* opt_impl;
+    bool with_mask = true;
 };
 
 struct sdpa_gpu_test : public ::testing::TestWithParam<sdpa_test_params> {
@@ -51,7 +52,7 @@ struct sdpa_gpu_test : public ::testing::TestWithParam<sdpa_test_params> {
         set_values(mem, input_data);
     }
 
-    cldnn::memory::ptr run_network(bool is_caching_test, bool use_micro_sdpa,
+    cldnn::memory::ptr run_network(bool is_caching_test, char const* impl,
             cldnn::layout input0_dyn_layout,
             cldnn::layout input1_dyn_layout,
             cldnn::layout input2_dyn_layout,
@@ -59,32 +60,36 @@ struct sdpa_gpu_test : public ::testing::TestWithParam<sdpa_test_params> {
             cldnn::memory::ptr input0,
             cldnn::memory::ptr input1,
             cldnn::memory::ptr input2,
-            cldnn::memory::ptr input3) {
+            cldnn::memory::ptr input3,
+            bool with_mask) {
         auto& engine = get_test_engine();
         topology topo;
         topo.add(input_layout("input0", input0_dyn_layout));
         topo.add(input_layout("input1", input1_dyn_layout));
         topo.add(input_layout("input2", input2_dyn_layout));
-        topo.add(input_layout("input3", input3_dyn_layout));
-        topo.add(scaled_dot_product_attention("sdpa", {input_info("input0"), input_info("input1"), input_info("input2"), input_info("input3")},
-            false, -1, {0,2,1,3}, {0,2,1,3}, {0,2,1,3}, {0,1,2,3}, {}, false));
+        if (with_mask) {
+            topo.add(input_layout("input3", input3_dyn_layout));
+            topo.add(scaled_dot_product_attention("sdpa", {input_info("input0"), input_info("input1"), input_info("input2"), input_info("input3")},
+                false, -1, {0,2,1,3}, {0,2,1,3}, {0,2,1,3}, {0,1,2,3}, {}, false));
+        } else {
+            topo.add(scaled_dot_product_attention("sdpa", {input_info("input0"), input_info("input1"), input_info("input2")},
+                false, -1, {0,2,1,3}, {0,2,1,3}, {0,2,1,3}, {0,1,2,3}, {}, false));
+        }
         topo.add(reorder("result",input_info("sdpa"), format::bfyx, data_types::f16));
 
         ExecutionConfig config = get_test_default_config(engine);
         config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
 
-        if (use_micro_sdpa) {
-            config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"sdpa", {format::type::bfyx, "sdpa_micro"}} }));
-        } else {
-            config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"sdpa", {format::type::bfyx, "sdpa_ref"}} }));
-        }
+        config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"sdpa", {format::type::bfyx, impl}} }));
 
         cldnn::network::ptr net = get_network(engine, topo, config, get_test_stream_ptr(), is_caching_test);
 
         net->set_input_data("input0", input0);
         net->set_input_data("input1", input1);
         net->set_input_data("input2", input2);
-        net->set_input_data("input3", input3);
+        if (with_mask) {
+            net->set_input_data("input3", input3);
+        }
 
         auto outputs = net->execute();
         auto output = outputs.at("result").get_memory();
@@ -119,12 +124,12 @@ struct sdpa_gpu_test : public ::testing::TestWithParam<sdpa_test_params> {
         load_input(input2, 2);
         load_input(input3, 3);
 
-        auto mem_ref_ptr = run_network(is_caching_test, false,
+        auto mem_ref_ptr = run_network(is_caching_test, "sdpa_ref",
                                         input0_dyn_layout, input1_dyn_layout, input2_dyn_layout, input3_dyn_layout,
-                                        input0, input1, input2, input3);
-        auto mem_opt_ptr = run_network(is_caching_test, true,
+                                        input0, input1, input2, input3, p.with_mask);
+        auto mem_opt_ptr = run_network(is_caching_test, p.opt_impl,
                                         input0_dyn_layout, input1_dyn_layout, input2_dyn_layout, input3_dyn_layout,
-                                        input0, input1, input2, input3);
+                                        input0, input1, input2, input3, p.with_mask);
         cldnn::mem_lock<ov::float16, mem_lock_type::read> ref_data(mem_ref_ptr, get_test_stream());
         cldnn::mem_lock<ov::float16, mem_lock_type::read> opt_data(mem_opt_ptr, get_test_stream());
         {
@@ -163,11 +168,29 @@ struct sdpa_gpu_test : public ::testing::TestWithParam<sdpa_test_params> {
     }
 };
 
+#ifdef ENABLE_ONEDNN_FOR_GPU
 INSTANTIATE_TEST_SUITE_P(
     smoke_sdpa_gpu_test,
     sdpa_gpu_test,
     ::testing::Values(
-        sdpa_test_params{64, 32, 990, 128, 2}
+        sdpa_test_params{64, 32, 990, 128, 2, "sdpa_micro"}
+    ),
+    sdpa_gpu_test::PrintToStringParamName
+);
+#endif
+INSTANTIATE_TEST_SUITE_P(
+    smoke_sdpa_gpu_test_tinytc_d64,
+    sdpa_gpu_test,
+    ::testing::Values(
+        sdpa_test_params{64, 32, 1024, 128, 1, "sdpa_tinytc", false}
+    ),
+    sdpa_gpu_test::PrintToStringParamName
+);
+INSTANTIATE_TEST_SUITE_P(
+    smoke_sdpa_gpu_test_tinytc_d128,
+    sdpa_gpu_test,
+    ::testing::Values(
+        sdpa_test_params{128, 32, 1024, 128, 1, "sdpa_tinytc", false}
     ),
     sdpa_gpu_test::PrintToStringParamName
 );
@@ -179,5 +202,4 @@ TEST_P(sdpa_gpu_test, basic) {
     auto p = GetParam();
     execute(p);
 }
-#endif
 } // namespace

@@ -155,6 +155,44 @@ std::string toCLType(Datatype dType) {
     }
 }
 
+auto toTinyTCType(WeightsType wType) -> char const* {
+    switch (wType) {
+        case WeightsType::F16:
+            return "f16";
+        case WeightsType::F32:
+            return "f32";
+        case WeightsType::INT8:
+            return "i8";
+        case WeightsType::INT32:
+            return "f32";
+        case WeightsType::BF16:
+            return "bf16";
+        default:
+            return "N/A";
+    }
+}
+
+auto toTinyTCType(Datatype dType) -> char const* {
+    switch (dType) {
+        case Datatype::INT8:
+            return "i8";
+        case Datatype::INT16:
+            return "i16";
+        case Datatype::INT32:
+            return "i32";
+        case Datatype::INT64:
+            return "i64";
+        case Datatype::F16:
+            return "f16";
+        case Datatype::F32:
+            return "f32";
+        case Datatype::BF16:
+            return "bf16";
+        default:
+            return "";
+    }
+}
+
 std::string getMeanOpString(MeanOp op) {
     switch (op) {
         case MeanOp::NONE:

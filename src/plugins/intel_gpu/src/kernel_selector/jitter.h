@@ -71,6 +71,8 @@ inline std::string GetTypeName<double>() {
 
 std::string toCLType(WeightsType wType);
 std::string toCLType(Datatype dType);
+auto toTinyTCType(WeightsType wType) -> char const*;
+auto toTinyTCType(Datatype dType) -> char const*;
 std::string getMeanOpString(MeanOp op);
 inline std::string toVectorMulString(const std::vector<std::string>& vec) {
     std::stringstream ss;

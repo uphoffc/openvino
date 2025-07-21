@@ -6,6 +6,9 @@ set(TARGET_NAME "openvino_intel_gpu_graph")
 
 file(GLOB SUBDIRS "${CMAKE_CURRENT_SOURCE_DIR}/impls/*")
 
+find_package(tinytc REQUIRED)
+find_package(tinytc_cl REQUIRED)
+
 find_host_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 foreach(SUBDIR IN LISTS SUBDIRS)
@@ -135,6 +138,7 @@ ov_add_target(
 ov_build_target_faster(${TARGET_NAME} PCH)
 
 target_compile_options(${TARGET_NAME} PRIVATE ${COMMON_COMPILE_OPTIONS})
+target_link_libraries(${TARGET_NAME} PRIVATE tinytc::tinytc tinytc::tinytc_cl)
 
 ov_set_threading_interface_for(${TARGET_NAME})
 

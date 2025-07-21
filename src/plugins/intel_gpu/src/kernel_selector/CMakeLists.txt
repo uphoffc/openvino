@@ -4,6 +4,8 @@
 
 set(TARGET_NAME "openvino_intel_gpu_kernels")
 
+find_package(tinytc REQUIRED)
+
 find_host_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 file(GLOB_RECURSE LIBRARY_SRC
@@ -75,6 +77,7 @@ if(COMMAND add_cpplint_target)
 endif()
 
 target_link_libraries(${TARGET_NAME} PUBLIC OpenCL::OpenCL openvino::runtime PRIVATE openvino::runtime::dev)
+target_link_libraries(${TARGET_NAME} PRIVATE tinytc::tinytc)
 
 target_include_directories(${TARGET_NAME} PRIVATE $<TARGET_PROPERTY:rapidjson,INTERFACE_INCLUDE_DIRECTORIES>)
 

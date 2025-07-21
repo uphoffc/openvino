@@ -24,6 +24,9 @@
 #include "ocl/ocl_common.hpp"
 #include "ocl/ocl_device.hpp"
 
+#include "tinytc/tinytc.hpp"
+#include "tinytc/tinytc_cl.hpp"
+
 #ifdef WIN32
 #include <sdkddkver.h>
 #ifdef NTDDI_WIN10_RS5
@@ -173,7 +176,7 @@ void kernels_cache::get_program_source(const kernels_code& kernels_source_code, 
                 const auto& batch_id = 0;
                 // increase bucket id if and only if new bucket comes
                 bucket_id = static_cast<int32_t>(program_buckets.size() - 1);
-                current_bucket.push_back(batch_program(bucket_id, batch_id, options, batch_headers, kernel_string->language));
+                current_bucket.push_back(batch_program(bucket_id, batch_id, options, batch_headers, kernel_string->language, kernel_string->flags));
             }
 
             // This is a temporary walk-around to avoid severe performance drop.
@@ -204,7 +207,7 @@ void kernels_cache::get_program_source(const kernels_code& kernels_source_code, 
                 || current_bucket.back().entry_point_to_id.find(entry_point) != current_bucket.back().entry_point_to_id.end()
                 || need_separate_batch(entry_point)) {
                 const auto& batch_id = static_cast<int32_t>(current_bucket.size());
-                current_bucket.push_back(batch_program(bucket_id, batch_id, options, batch_headers, kernel_string->language));
+                current_bucket.push_back(batch_program(bucket_id, batch_id, options, batch_headers, kernel_string->language, kernel_string->flags));
             }
 
             auto& current_batch = current_bucket.back();
@@ -389,7 +392,23 @@ void kernels_cache::build_batch(const batch_program& batch, compiled_kernels& co
 
         // Run compilation
         if (precompiled_kernels.empty()) {
-            cl::Program program(cl_build_device.get_context(), batch.source);
+            auto program = [&]() {
+                if (batch.language == kernel_language::TINYTC) {
+                    OPENVINO_ASSERT(batch.kernels_counter == 1);
+
+                    auto tctx = tinytc::create_compiler_context();
+                    tinytc::set_error_reporter(tctx.get(), [](char const *what, const tinytc_location_t *, void *) {
+                        std::cerr << what << std::endl;
+                    });
+                    auto tprog = tinytc::parse_string(batch.source.back(), tctx.get());
+
+                    auto ctx = cl_build_device.get_context().get();
+                    auto dev = cl_build_device.get_device().get();
+                    auto prog = tinytc::create_kernel_bundle(ctx, dev, tprog.get(), batch.flags);
+                    return cl::Program(prog.get(), true);
+                }
+                return cl::Program(cl_build_device.get_context(), batch.source);
+            }();
             {
                 OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "KernelsCache::BuildProgram::RunCompilation");
                 if (program.build({cl_build_device.get_device()}, batch.options.c_str()) != CL_SUCCESS)

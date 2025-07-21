@@ -59,12 +59,14 @@ public:
         bool has_microkernels;
         std::map<std::string, std::pair<kernel_impl_params, size_t>> entry_point_to_id;
         kernel_language language;
+        std::uint32_t flags;
 
         explicit batch_program(int32_t _bucket_id,
                                int32_t _batch_id,
                                std::string _options,
                                const std::map<std::string, std::string>& batch_headers,
-                               kernel_language _language)
+                               kernel_language _language,
+                               std::uint32_t _flags)
             : bucket_id(_bucket_id),
               batch_id(_batch_id),
               hash_value(0),
@@ -74,7 +76,8 @@ public:
               dump_custom_program(false),
               has_microkernels(false),
               entry_point_to_id({}),
-              language(_language) {
+              language(_language),
+              flags(_flags) {
             if (language == kernel_language::OCLC) {
                 static const std::vector<std::string> micro_kernel_include_names {
                     "generic_vector_ops",
